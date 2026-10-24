@@ -1,9 +1,10 @@
-"""Testes da AVL — Etapa 1 (busca, inserção, rotações, consultas, estatísticas)."""
+"""Testes da AVL — Etapas 1 e 2 (busca, inserção, rotações, consultas, remoção)."""
 
 import contextlib
 import io
 import random
 import unittest
+from decimal import Decimal
 
 from avl import ArvoreAVL
 from auxiliares import chaves, conta, verificar_avl
@@ -137,6 +138,133 @@ class TestConsultas(unittest.TestCase):
         a = arvore_com(50, 20, 80, 10, 90, 60)
         self.assertEqual(a.minimo().numero, 10)
         self.assertEqual(a.maximo().numero, 90)
+
+
+class TestRemocao(unittest.TestCase):
+    """Etapa 2 — remoção com rebalanceamento."""
+
+    # Árvore de Fibonacci de altura 4: a AVL mais "magra" possível com 12 nós.
+    # Qualquer remoção do lado raso pode desbalancear vários níveis.
+    FIBONACCI = (8, 5, 11, 3, 7, 10, 12, 2, 4, 6, 9, 1)
+
+    def test_caso_do_plano(self):
+        # 4,2,6,1,3 → remover 6: o 4 fica com FB=+2 e o 2 tem FB=0 → LL
+        a = arvore_com(4, 2, 6, 1, 3)
+        a.resetar_estatisticas()
+        self.assertEqual(a.remover(6).numero, 6)
+        self.assertEqual(chaves(a.pre_ordem()), [2, 1, 4, 3])
+        self.assertEqual(a.estatisticas()["rotacoes"], 1)
+        verificar_avl(a)
+
+    def test_rebalanceamento_em_varios_niveis(self):
+        a = arvore_com(*self.FIBONACCI)
+        self.assertEqual(a.altura(), 4)
+        a.resetar_estatisticas()
+        a.definir_modo_detalhado(True)
+        saida = io.StringIO()
+        with contextlib.redirect_stdout(saida):
+            a.remover(12)
+        # rebalanceia primeiro em 11, depois na raiz 8 (dois níveis diferentes)
+        self.assertEqual(saida.getvalue().count("desbalanceado"), 2)
+        self.assertIn("desbalanceado em 11", saida.getvalue())
+        self.assertIn("desbalanceado em 8", saida.getvalue())
+        self.assertEqual(a.estatisticas()["rotacoes"], 2)
+        self.assertEqual(chaves(a.pre_ordem()), [5, 3, 2, 1, 4, 8, 7, 6, 10, 9, 11])
+        verificar_avl(a)
+
+    def test_folha(self):
+        a = arvore_com(20, 10, 30)
+        a.remover(10)
+        self.assertEqual(chaves(a.pre_ordem()), [20, 30])
+        verificar_avl(a)
+
+    def test_um_filho(self):
+        a = arvore_com(20, 10, 30, 35)
+        a.remover(30)  # 30 só tem o filho direito 35
+        self.assertEqual(chaves(a.pre_ordem()), [20, 10, 35])
+        verificar_avl(a)
+
+    def test_dois_filhos_preserva_atributos(self):
+        a = ArvoreAVL()
+        for k in (20, 10, 30, 25, 40):
+            a.inserir(conta(k, titular=f"Titular {k}", saldo=Decimal(k)))
+        removida = a.remover(20)  # raiz com 2 filhos; sucessor = 25
+        # retorna a conta ORIGINAL do 20, não a do sucessor
+        self.assertEqual(removida.numero, 20)
+        self.assertEqual(removida.titular, "Titular 20")
+        # o sucessor subiu com TODOS os seus atributos
+        novo = a.buscar(25)
+        self.assertEqual(novo.titular, "Titular 25")
+        self.assertEqual(novo.saldo, Decimal(25))
+        self.assertEqual(chaves(a.pre_ordem()), [25, 10, 30, 40])
+        self.assertIsNone(a.buscar(20))
+        verificar_avl(a)
+
+    def test_dois_filhos_sucessor_profundo(self):
+        # sucessor de 50 é 55, que está no fundo da subárvore direita
+        a = arvore_com(50, 30, 70, 20, 40, 60, 80, 55)
+        self.assertEqual(a.remover(50).numero, 50)
+        self.assertEqual(a.pre_ordem()[0].numero, 55)
+        verificar_avl(a)
+
+    def test_remover_raiz_unica_e_ultimo(self):
+        a = arvore_com(7)
+        self.assertEqual(a.remover(7).numero, 7)
+        self.assertEqual((a.altura(), a.tamanho()), (-1, 0))
+        self.assertIsNone(a.minimo())
+        self.assertIsNone(a.remover(7))  # remover de árvore vazia
+        self.assertTrue(a.inserir(conta(7)))  # árvore volta a funcionar
+
+    def test_inexistente_nao_altera(self):
+        a = arvore_com(*self.FIBONACCI)
+        antes = chaves(a.pre_ordem())
+        a.resetar_estatisticas()
+        self.assertIsNone(a.remover(99))
+        self.assertIsNone(a.remover(0))
+        self.assertEqual(chaves(a.pre_ordem()), antes)
+        self.assertEqual(a.tamanho(), 12)
+        self.assertEqual(a.estatisticas()["rotacoes"], 0)
+
+    def test_remocao_nao_conta_nos_visitados(self):
+        a = arvore_com(5, 3, 8)
+        a.remover(3)
+        self.assertEqual(a.estatisticas()["nos_visitados"], 0)
+
+    def test_esvaziar_crescente_e_aleatorio(self):
+        a = arvore_com(*range(1, 201))
+        for k in range(1, 201):
+            a.remover(k)
+            verificar_avl(a)
+        self.assertEqual(a.tamanho(), 0)
+
+        rng = random.Random(7)
+        ordem = list(range(1, 201))
+        rng.shuffle(ordem)
+        a = arvore_com(*ordem)
+        rng.shuffle(ordem)
+        for k in ordem:
+            self.assertEqual(a.remover(k).numero, k)
+            verificar_avl(a)
+        self.assertEqual(a.altura(), -1)
+
+    def test_operacoes_aleatorias_contra_dict(self):
+        """2.000 operações mistas, validando a cada passo (seção 9 do plano)."""
+        rng = random.Random(2026)
+        a, ref = ArvoreAVL(), {}
+        for _ in range(2000):
+            k = rng.randint(1, 300)
+            op = rng.random()
+            if op < 0.45:
+                c = conta(k, titular=f"T{k}")
+                self.assertEqual(a.inserir(c), k not in ref)
+                ref.setdefault(k, c)
+            elif op < 0.85:
+                esperado = ref.pop(k, None)
+                self.assertIs(a.remover(k), esperado)
+            else:
+                self.assertIs(a.buscar(k), ref.get(k))
+            verificar_avl(a)
+        self.assertEqual(chaves(a.em_ordem()), sorted(ref))
 
 
 class TestModoDetalhado(unittest.TestCase):

@@ -9,8 +9,9 @@ Convenções do grupo (PLANO.md, seção 3):
 - Nós visitados são contados somente em buscar().
 - Remoção de nó com 2 filhos usa o sucessor (mínimo da subárvore direita).
 
-Etapa 1 (este arquivo): nó, busca, inserção com rotações, consultas,
-estatísticas e modo detalhado. Remoção, validação e exibição vêm na Etapa 2/3.
+Etapa 1: nó, busca, inserção com rotações, consultas, estatísticas, modo detalhado.
+Etapa 2: remoção (folha, 1 filho, 2 filhos com sucessor) com rebalanceamento.
+Etapa 3 (pendente): validar() e exibir().
 """
 
 from __future__ import annotations
@@ -203,10 +204,63 @@ class ArvoreAVL:
         return self._balancear(no)
 
     # ------------------------------------------------------------------ #
-    # Remoção (Etapa 2)
+    # Remoção
     # ------------------------------------------------------------------ #
     def remover(self, numero: int) -> Conta | None:
-        raise NotImplementedError("Etapa 2")
+        """Remove a conta com esse número e a devolve; None se não existir.
+
+        Chave ausente não altera a árvore nem os contadores.
+        """
+        self._removida: Conta | None = None
+        self._raiz = self._remover(self._raiz, numero)
+        if self._removida is None:
+            self._log(f"remoção {numero}: não encontrada")
+            return None
+        self._tamanho -= 1
+        return self._removida
+
+    def _remover(self, no: _NoAVL | None, numero: int) -> _NoAVL | None:
+        if no is None:
+            return None  # chegou ao fim sem achar: nada muda neste caminho
+
+        chave = no.conta.numero
+        if numero < chave:
+            no.esquerda = self._remover(no.esquerda, numero)
+        elif numero > chave:
+            no.direita = self._remover(no.direita, numero)
+        else:
+            # Achou: guarda a conta original antes de qualquer substituição.
+            self._removida = no.conta
+
+            # Casos 1 e 2: folha ou um filho → o filho (ou None) sobe no lugar.
+            if no.esquerda is None or no.direita is None:
+                filho = no.esquerda if no.esquerda is not None else no.direita
+                caso = "folha" if filho is None else "1 filho"
+                self._log(f"removido {chave} ({caso})")
+                return filho
+
+            # Caso 3: dois filhos → o sucessor (mínimo da direita) assume o lugar.
+            sucessor = no.direita
+            while sucessor.esquerda is not None:
+                sucessor = sucessor.esquerda
+            self._log(
+                f"removido {chave} (2 filhos) → sucessor {sucessor.conta.numero} assume"
+            )
+            no.conta = sucessor.conta  # a Conta inteira, não só o número
+            # Remove o sucessor da subárvore direita. Ele tem no máximo 1 filho
+            # (o direito), então essa chamada cai sempre nos casos 1 ou 2.
+            no.direita = self._remover_sucessor(no.direita)
+
+        if self._removida is None:
+            return no  # chave ausente: alturas não mudaram
+        return self._balancear(no)
+
+    def _remover_sucessor(self, no: _NoAVL) -> _NoAVL | None:
+        """Remove o nó mínimo da subárvore, rebalanceando na volta."""
+        if no.esquerda is None:
+            return no.direita
+        no.esquerda = self._remover_sucessor(no.esquerda)
+        return self._balancear(no)
 
     # ------------------------------------------------------------------ #
     # Consultas
