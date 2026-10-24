@@ -60,6 +60,7 @@ class ArvoreAVL:
         self._rotacoes = 0
         self._nos_visitados = 0
         self._buscas = 0
+        self._casos = dict.fromkeys(("LL", "RR", "LR", "RL"), 0)
 
     # ------------------------------------------------------------------ #
     # Modo detalhado
@@ -68,8 +69,13 @@ class ArvoreAVL:
         self._detalhado = bool(ativo)
 
     def _log(self, mensagem: str) -> None:
-        if self._detalhado:
-            print(f"[{self.NOME}] {mensagem}")
+        """Imprime uma mensagem do passo a passo.
+
+        Toda chamada fica dentro de `if self._detalhado:`. Sem isso, o Python
+        montaria a f-string mesmo com o modo desligado, e esse custo entraria
+        no cronômetro dos experimentos (medido: ~8% na inserção de 10.000).
+        """
+        print(f"[{self.NOME}] {mensagem}")
 
     # ------------------------------------------------------------------ #
     # Estatísticas
@@ -86,6 +92,16 @@ class ArvoreAVL:
         self._rotacoes = 0
         self._nos_visitados = 0
         self._buscas = 0
+        self._casos = dict.fromkeys(self._casos, 0)
+
+    def rotacoes_por_caso(self) -> dict[str, int]:
+        """Quantos rebalanceamentos de cada caso ocorreram desde o último reset.
+
+        Extra da AVL (fora do contrato comum), usado na análise A × B.
+        Conta CASOS, não rotações: LL e RR valem 1 rotação cada; LR e RL, 2.
+        Logo: LL + RR + 2·(LR + RL) == estatisticas()["rotacoes"].
+        """
+        return dict(self._casos)
 
     # ------------------------------------------------------------------ #
     # Rotações e rebalanceamento
@@ -106,7 +122,8 @@ class ArvoreAVL:
         _atualizar_altura(y)  # y desceu: atualiza primeiro
         _atualizar_altura(x)
         self._rotacoes += 1
-        self._log(f"rotação à direita em {y.conta.numero} → {x.conta.numero} sobe")
+        if self._detalhado:
+            self._log(f"rotação à direita em {y.conta.numero} → {x.conta.numero} sobe")
         return x
 
     def _rotacao_esquerda(self, x: _NoAVL) -> _NoAVL:
@@ -118,7 +135,8 @@ class ArvoreAVL:
         _atualizar_altura(x)
         _atualizar_altura(y)
         self._rotacoes += 1
-        self._log(f"rotação à esquerda em {x.conta.numero} → {y.conta.numero} sobe")
+        if self._detalhado:
+            self._log(f"rotação à esquerda em {x.conta.numero} → {y.conta.numero} sobe")
         return y
 
     def _balancear(self, no: _NoAVL) -> _NoAVL:
@@ -134,18 +152,26 @@ class ArvoreAVL:
         if fb > 1:  # pende para a esquerda
             assert no.esquerda is not None
             if _fator_balanceamento(no.esquerda) >= 0:
-                self._log(f"desbalanceado em {no.conta.numero} (FB=+{fb}) → caso LL")
+                self._casos["LL"] += 1
+                if self._detalhado:
+                    self._log(f"desbalanceado em {no.conta.numero} (FB=+{fb}) → caso LL")
                 return self._rotacao_direita(no)
-            self._log(f"desbalanceado em {no.conta.numero} (FB=+{fb}) → caso LR")
+            self._casos["LR"] += 1
+            if self._detalhado:
+                self._log(f"desbalanceado em {no.conta.numero} (FB=+{fb}) → caso LR")
             no.esquerda = self._rotacao_esquerda(no.esquerda)
             return self._rotacao_direita(no)
 
         if fb < -1:  # pende para a direita
             assert no.direita is not None
             if _fator_balanceamento(no.direita) <= 0:
-                self._log(f"desbalanceado em {no.conta.numero} (FB={fb}) → caso RR")
+                self._casos["RR"] += 1
+                if self._detalhado:
+                    self._log(f"desbalanceado em {no.conta.numero} (FB={fb}) → caso RR")
                 return self._rotacao_esquerda(no)
-            self._log(f"desbalanceado em {no.conta.numero} (FB={fb}) → caso RL")
+            self._casos["RL"] += 1
+            if self._detalhado:
+                self._log(f"desbalanceado em {no.conta.numero} (FB={fb}) → caso RL")
             no.direita = self._rotacao_direita(no.direita)
             return self._rotacao_esquerda(no)
 
@@ -165,10 +191,12 @@ class ArvoreAVL:
             if self._detalhado:
                 caminho.append(chave)
             if numero == chave:
-                self._log(f"busca {numero}: encontrada · caminho {caminho}")
+                if self._detalhado:
+                    self._log(f"busca {numero}: encontrada · caminho {caminho}")
                 return no.conta
             no = no.esquerda if numero < chave else no.direita
-        self._log(f"busca {numero}: não encontrada · caminho {caminho}")
+        if self._detalhado:
+            self._log(f"busca {numero}: não encontrada · caminho {caminho}")
         return None
 
     # ------------------------------------------------------------------ #
@@ -181,14 +209,16 @@ class ArvoreAVL:
         if self._inseriu:
             self._tamanho += 1
         else:
-            self._log(f"inserção {conta.numero}: duplicata rejeitada")
+            if self._detalhado:
+                self._log(f"inserção {conta.numero}: duplicata rejeitada")
         return self._inseriu
 
     def _inserir(self, no: _NoAVL | None, conta: Conta, pai: int | None) -> _NoAVL:
         if no is None:
             self._inseriu = True
-            onde = "como raiz" if pai is None else f"sob {pai}"
-            self._log(f"inserido {conta.numero} {onde}")
+            if self._detalhado:
+                onde = "como raiz" if pai is None else f"sob {pai}"
+                self._log(f"inserido {conta.numero} {onde}")
             return _NoAVL(conta)
 
         chave = no.conta.numero
@@ -214,7 +244,8 @@ class ArvoreAVL:
         self._removida: Conta | None = None
         self._raiz = self._remover(self._raiz, numero)
         if self._removida is None:
-            self._log(f"remoção {numero}: não encontrada")
+            if self._detalhado:
+                self._log(f"remoção {numero}: não encontrada")
             return None
         self._tamanho -= 1
         return self._removida
@@ -236,16 +267,18 @@ class ArvoreAVL:
             if no.esquerda is None or no.direita is None:
                 filho = no.esquerda if no.esquerda is not None else no.direita
                 caso = "folha" if filho is None else "1 filho"
-                self._log(f"removido {chave} ({caso})")
+                if self._detalhado:
+                    self._log(f"removido {chave} ({caso})")
                 return filho
 
             # Caso 3: dois filhos → o sucessor (mínimo da direita) assume o lugar.
             sucessor = no.direita
             while sucessor.esquerda is not None:
                 sucessor = sucessor.esquerda
-            self._log(
-                f"removido {chave} (2 filhos) → sucessor {sucessor.conta.numero} assume"
-            )
+            if self._detalhado:
+                self._log(
+                    f"removido {chave} (2 filhos) → sucessor {sucessor.conta.numero} assume"
+                )
             no.conta = sucessor.conta  # a Conta inteira, não só o número
             # Remove o sucessor da subárvore direita. Ele tem no máximo 1 filho
             # (o direito), então essa chamada cai sempre nos casos 1 ou 2.
