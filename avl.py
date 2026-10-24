@@ -11,7 +11,7 @@ Convenções do grupo (PLANO.md, seção 3):
 
 Etapa 1: nó, busca, inserção com rotações, consultas, estatísticas, modo detalhado.
 Etapa 2: remoção (folha, 1 filho, 2 filhos com sucessor) com rebalanceamento.
-Etapa 3 (pendente): validar() e exibir().
+Etapa 3: validar() e exibir().
 """
 
 from __future__ import annotations
@@ -321,10 +321,91 @@ class ArvoreAVL:
         return self._tamanho
 
     # ------------------------------------------------------------------ #
-    # Exibição e validação (Etapa 3)
+    # Exibição
     # ------------------------------------------------------------------ #
     def exibir(self) -> str:
-        raise NotImplementedError("Etapa 3")
+        """Desenha a árvore deitada: raiz à esquerda, filho direito acima.
 
+        Cada nó aparece como `numero [h=altura, FB=fator]`. Retorna a string;
+        quem imprime é o menu.
+        """
+        if self._raiz is None:
+            return "(árvore vazia)"
+        linhas: list[str] = []
+        self._desenhar(self._raiz, "", "", linhas)
+        return "\n".join(linhas)
+
+    def _desenhar(self, no: _NoAVL | None, prefixo: str, conector: str,
+                  linhas: list[str]) -> None:
+        """Percurso direita → nó → esquerda, para a direita ficar no alto.
+
+        `prefixo` acumula as barras verticais dos níveis de cima; `conector`
+        é o ramo que liga este nó ao pai (┌── acima do pai, └── abaixo).
+        """
+        if no is None:
+            return
+        # Filho direito: fica acima. A barra vertical só continua para baixo
+        # se este nó estiver ABAIXO do pai (└──), ligando-o ao pai.
+        if no.direita is not None:
+            continua = "│   " if conector == "└── " else "    "
+            self._desenhar(no.direita, prefixo + (continua if conector else ""),
+                           "┌── ", linhas)
+
+        fb = _fator_balanceamento(no)
+        fb_txt = f"{fb:+d}" if fb else "0"
+        linhas.append(f"{prefixo}{conector}{no.conta.numero} [h={no.altura}, FB={fb_txt}]")
+
+        if no.esquerda is not None:
+            continua = "│   " if conector == "┌── " else "    "
+            self._desenhar(no.esquerda, prefixo + (continua if conector else ""),
+                           "└── ", linhas)
+
+    # ------------------------------------------------------------------ #
+    # Validação
+    # ------------------------------------------------------------------ #
     def validar(self) -> tuple[bool, list[str]]:
-        raise NotImplementedError("Etapa 3")
+        """Confere todas as propriedades da AVL sem confiar nos dados guardados.
+
+        Verifica, para cada nó:
+        1. Ordem de busca com limites (mín, máx) herdados de TODOS os
+           ancestrais — não só pai × filho.
+        2. |FB| ≤ 1, com FB calculado a partir das alturas REAIS.
+        3. Altura armazenada = altura recalculada.
+        E, ao final, tamanho armazenado = número real de nós.
+
+        Retorna (True, []) se tudo estiver certo, ou (False, [violações]).
+        Não para no primeiro erro: lista todas as violações encontradas.
+        """
+        violacoes: list[str] = []
+        _, contagem = self._validar(self._raiz, None, None, violacoes)
+        if contagem != self._tamanho:
+            violacoes.append(
+                f"tamanho armazenado {self._tamanho} ≠ número real de nós {contagem}"
+            )
+        return (not violacoes, violacoes)
+
+    def _validar(self, no: _NoAVL | None, minimo: int | None, maximo: int | None,
+                 violacoes: list[str]) -> tuple[int, int]:
+        """Retorna (altura real, quantidade de nós) da subárvore."""
+        if no is None:
+            return -1, 0
+
+        k = no.conta.numero
+        if (minimo is not None and k <= minimo) or (maximo is not None and k >= maximo):
+            faixa = f"({'-∞' if minimo is None else minimo}, {'+∞' if maximo is None else maximo})"
+            violacoes.append(f"ordem violada: {k} fora do intervalo permitido {faixa}")
+
+        # À esquerda, tudo deve ser < k; à direita, tudo > k.
+        h_esq, n_esq = self._validar(no.esquerda, minimo, k, violacoes)
+        h_dir, n_dir = self._validar(no.direita, k, maximo, violacoes)
+
+        fb_real = h_esq - h_dir
+        if abs(fb_real) > 1:
+            violacoes.append(f"desbalanceado: nó {k} com FB={fb_real:+d}")
+
+        h_real = 1 + max(h_esq, h_dir)
+        if no.altura != h_real:
+            violacoes.append(
+                f"altura inconsistente: nó {k} guarda h={no.altura}, real h={h_real}"
+            )
+        return h_real, n_esq + n_dir + 1

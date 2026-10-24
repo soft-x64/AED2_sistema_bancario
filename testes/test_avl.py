@@ -1,4 +1,4 @@
-"""Testes da AVL — Etapas 1 e 2 (busca, inserção, rotações, consultas, remoção)."""
+"""Testes da AVL — Etapas 1, 2 e 3 (inserção, busca, remoção, validação, exibição)."""
 
 import contextlib
 import io
@@ -6,7 +6,7 @@ import random
 import unittest
 from decimal import Decimal
 
-from avl import ArvoreAVL
+from avl import ArvoreAVL, _NoAVL
 from auxiliares import chaves, conta, verificar_avl
 
 
@@ -265,6 +265,132 @@ class TestRemocao(unittest.TestCase):
                 self.assertIs(a.buscar(k), ref.get(k))
             verificar_avl(a)
         self.assertEqual(chaves(a.em_ordem()), sorted(ref))
+
+
+def no(numero: int, esquerda=None, direita=None, altura=None) -> _NoAVL:
+    """Monta um nó à mão. Sem `altura`, calcula a correta a partir dos filhos."""
+    n = _NoAVL(conta(numero))
+    n.esquerda, n.direita = esquerda, direita
+    if altura is None:
+        h = lambda x: x.altura if x is not None else -1
+        altura = 1 + max(h(esquerda), h(direita))
+    n.altura = altura
+    return n
+
+
+def arvore_manual(raiz, tamanho: int) -> ArvoreAVL:
+    """Árvore com estrutura forçada — permite criar AVLs inválidas para o validador."""
+    a = ArvoreAVL()
+    a._raiz, a._tamanho = raiz, tamanho
+    return a
+
+
+class TestValidar(unittest.TestCase):
+    """Etapa 3 — o validador aceita AVLs válidas e detecta cada tipo de corrupção."""
+
+    def test_arvores_validas(self):
+        self.assertEqual(ArvoreAVL().validar(), (True, []))
+        self.assertEqual(arvore_com(*TestRemocao.FIBONACCI).validar(), (True, []))
+        self.assertEqual(arvore_com(*range(1, 500)).validar(), (True, []))
+
+    def test_valida_apos_operacoes_aleatorias(self):
+        rng = random.Random(99)
+        a = ArvoreAVL()
+        for _ in range(1000):
+            k = rng.randint(1, 200)
+            a.inserir(conta(k)) if rng.random() < 0.6 else a.remover(k)
+            ok, erros = a.validar()
+            self.assertTrue(ok, erros)
+
+    def test_ordem_violada_so_no_neto(self):
+        #     20          o 25 é maior que o pai 10 (localmente OK),
+        #    /  \         mas está à ESQUERDA do 20 → deveria ser < 20.
+        #  10    30       Um validador que só compara pai × filho não pega.
+        #    \
+        #     25
+        a = arvore_manual(no(20, no(10, None, no(25)), no(30)), 4)
+        ok, erros = a.validar()
+        self.assertFalse(ok)
+        self.assertEqual(len(erros), 1)
+        self.assertIn("ordem violada: 25", erros[0])
+
+    def test_chave_igual_ao_ancestral(self):
+        a = arvore_manual(no(20, no(10, None, no(20)), no(30)), 4)
+        self.assertFalse(a.validar()[0])
+
+    def test_desbalanceada(self):
+        # 30 → 20 → 10 em linha: alturas corretas, mas FB=+2 na raiz
+        a = arvore_manual(no(30, no(20, no(10))), 3)
+        ok, erros = a.validar()
+        self.assertFalse(ok)
+        self.assertEqual(erros, ["desbalanceado: nó 30 com FB=+2"])
+
+    def test_altura_armazenada_errada(self):
+        # estrutura balanceada, mas a raiz guarda h=5 em vez de 1
+        a = arvore_manual(no(20, no(10), no(30), altura=5), 3)
+        ok, erros = a.validar()
+        self.assertFalse(ok)
+        self.assertEqual(erros, ["altura inconsistente: nó 20 guarda h=5, real h=1"])
+
+    def test_fb_calculado_pela_altura_real(self):
+        # Alturas armazenadas "maquiadas" para esconder o desbalanceamento:
+        # o validador precisa recalcular, não confiar no campo altura.
+        a = arvore_manual(no(30, no(20, no(10), altura=0), altura=1), 3)
+        ok, erros = a.validar()
+        self.assertFalse(ok)
+        self.assertTrue(any("FB=+2" in e for e in erros), erros)
+
+    def test_tamanho_errado(self):
+        a = arvore_com(20, 10, 30)
+        a._tamanho = 7
+        ok, erros = a.validar()
+        self.assertFalse(ok)
+        self.assertEqual(erros, ["tamanho armazenado 7 ≠ número real de nós 3"])
+
+    def test_lista_todas_as_violacoes(self):
+        # ordem violada + altura errada + tamanho errado ao mesmo tempo
+        a = arvore_manual(no(20, no(10, None, no(25)), no(30), altura=9), 10)
+        ok, erros = a.validar()
+        self.assertFalse(ok)
+        self.assertEqual(len(erros), 3, erros)
+
+    def test_validar_nao_altera_estatisticas(self):
+        a = arvore_com(30, 20, 10)
+        antes = a.estatisticas()
+        a.validar()
+        self.assertEqual(a.estatisticas(), antes)
+
+
+class TestExibir(unittest.TestCase):
+    def test_vazia(self):
+        self.assertEqual(ArvoreAVL().exibir(), "(árvore vazia)")
+
+    def test_um_no(self):
+        self.assertEqual(arvore_com(5).exibir(), "5 [h=0, FB=0]")
+
+    def test_formato_completo(self):
+        a = arvore_com(20, 10, 30, 40)
+        esperado = "\n".join([
+            "    ┌── 40 [h=0, FB=0]",
+            "┌── 30 [h=1, FB=-1]",
+            "20 [h=2, FB=-1]",
+            "└── 10 [h=0, FB=0]",
+        ])
+        self.assertEqual(a.exibir(), esperado)
+
+    def test_barras_ligam_ao_pai(self):
+        a = arvore_com(*TestRemocao.FIBONACCI)
+        linhas = a.exibir().split("\n")
+        self.assertEqual(len(linhas), 12)
+        self.assertIn("│   └── 10 [h=1, FB=+1]", linhas)
+        self.assertIn("8 [h=4, FB=+1]", linhas)
+
+    def test_exibir_retorna_sem_imprimir(self):
+        saida = io.StringIO()
+        with contextlib.redirect_stdout(saida):
+            texto = arvore_com(1, 2, 3).exibir()
+        self.assertEqual(saida.getvalue(), "")
+        self.assertIn("2 [h=1, FB=0]", texto)
 
 
 class TestModoDetalhado(unittest.TestCase):
