@@ -77,8 +77,12 @@ class ArvoreRubroNegra:
         self._detalhado = bool(ativo)
 
     def _log(self, mensagem: str) -> None:
-        if self._detalhado:
-            print(f"[{self.NOME}] {mensagem}")
+        """Imprime uma mensagem do passo a passo.
+
+        Toda chamada fica dentro de `if self._detalhado:`; sem isso a f-string
+        seria montada mesmo com o modo desligado e o custo entraria no cronômetro.
+        """
+        print(f"[{self.NOME}] {mensagem}")
 
     # ------------------------------------------------------------------ #
     # Estatísticas
@@ -140,10 +144,11 @@ class ArvoreRubroNegra:
         y.esquerda = x
         x.pai = y
         self._rotacoes += 1
-        self._log(
-            f"rotação à esquerda em {x.conta.numero} → {y.conta.numero} sobe "
-            f"(rotações: {self._rotacoes})"
-        )
+        if self._detalhado:
+            self._log(
+                f"rotação à esquerda em {x.conta.numero} → {y.conta.numero} sobe "
+                f"(rotações: {self._rotacoes})"
+            )
 
     def _rotacao_direita(self, y: _NoRN) -> None:
         """Rotação simples à direita em y (espelho da rotação à esquerda)."""
@@ -162,10 +167,11 @@ class ArvoreRubroNegra:
         x.direita = y
         y.pai = x
         self._rotacoes += 1
-        self._log(
-            f"rotação à direita em {y.conta.numero} → {x.conta.numero} sobe "
-            f"(rotações: {self._rotacoes})"
-        )
+        if self._detalhado:
+            self._log(
+                f"rotação à direita em {y.conta.numero} → {x.conta.numero} sobe "
+                f"(rotações: {self._rotacoes})"
+            )
 
     # ------------------------------------------------------------------ #
     # Busca
@@ -181,10 +187,12 @@ class ArvoreRubroNegra:
             if self._detalhado:
                 caminho.append(chave)
             if numero == chave:
-                self._log(f"busca {numero}: encontrada · caminho {caminho}")
+                if self._detalhado:
+                    self._log(f"busca {numero}: encontrada · caminho {caminho}")
                 return no.conta
             no = no.esquerda if numero < chave else no.direita
-        self._log(f"busca {numero}: não encontrada · caminho {caminho}")
+        if self._detalhado:
+            self._log(f"busca {numero}: não encontrada · caminho {caminho}")
         return None
 
     # ------------------------------------------------------------------ #
@@ -203,20 +211,23 @@ class ArvoreRubroNegra:
             elif numero > chave:
                 atual = atual.direita
             else:
-                self._log(f"inserção {numero}: duplicata rejeitada")
+                if self._detalhado:
+                    self._log(f"inserção {numero}: duplicata rejeitada")
                 return False
 
         # Nó novo nasce vermelho (não conta como recoloração).
         novo = _NoRN(conta, VERMELHO, self.NIL, self.NIL, pai)
         if pai is self.NIL:
             self._raiz = novo
-            self._log(f"inserido {numero} como raiz")
+            if self._detalhado:
+                self._log(f"inserido {numero} como raiz")
         else:
             if numero < pai.conta.numero:
                 pai.esquerda = novo
             else:
                 pai.direita = novo
-            self._log(f"inserido {numero} sob {pai.conta.numero}")
+            if self._detalhado:
+                self._log(f"inserido {numero} sob {pai.conta.numero}")
 
         self._tamanho += 1
         self._corrigir_insercao(novo)
@@ -241,18 +252,20 @@ class ArvoreRubroNegra:
                     z = avo
                     continue
                 if z is pai.direita:  # triângulo esquerda-direita
-                    self._log(
-                        f"tio {self._nome(tio)} preto, triângulo (LR) em "
-                        f"{z.conta.numero} → rotação dupla"
-                    )
+                    if self._detalhado:
+                        self._log(
+                            f"tio {self._nome(tio)} preto, triângulo (LR) em "
+                            f"{z.conta.numero} → rotação dupla"
+                        )
                     z = pai
                     self._rotacao_esquerda(z)
                     pai = z.pai
                 else:
-                    self._log(
-                        f"tio {self._nome(tio)} preto, linha (LL) em "
-                        f"{z.conta.numero}"
-                    )
+                    if self._detalhado:
+                        self._log(
+                            f"tio {self._nome(tio)} preto, linha (LL) em "
+                            f"{z.conta.numero}"
+                        )
                 self._caso_linha(pai, avo)
                 self._rotacao_direita(avo)
             else:  # espelho: pai é filho direito do avô
@@ -262,42 +275,48 @@ class ArvoreRubroNegra:
                     z = avo
                     continue
                 if z is pai.esquerda:  # triângulo direita-esquerda
-                    self._log(
-                        f"tio {self._nome(tio)} preto, triângulo (RL) em "
-                        f"{z.conta.numero} → rotação dupla"
-                    )
+                    if self._detalhado:
+                        self._log(
+                            f"tio {self._nome(tio)} preto, triângulo (RL) em "
+                            f"{z.conta.numero} → rotação dupla"
+                        )
                     z = pai
                     self._rotacao_direita(z)
                     pai = z.pai
                 else:
-                    self._log(
-                        f"tio {self._nome(tio)} preto, linha (RR) em "
-                        f"{z.conta.numero}"
-                    )
+                    if self._detalhado:
+                        self._log(
+                            f"tio {self._nome(tio)} preto, linha (RR) em "
+                            f"{z.conta.numero}"
+                        )
                 self._caso_linha(pai, avo)
                 self._rotacao_esquerda(avo)
 
         if self._pintar(self._raiz, PRETO):
-            self._log(
-                f"raiz {self._raiz.conta.numero} pintada de preto "
-                f"(recolorações: {self._recoloracoes})"
-            )
+            if self._detalhado:
+                self._log(
+                    f"raiz {self._raiz.conta.numero} pintada de preto "
+                    f"(recolorações: {self._recoloracoes})"
+                )
 
     def _caso_tio_vermelho(self, pai: _NoRN, tio: _NoRN, avo: _NoRN) -> None:
-        self._log(
-            f"tio {tio.conta.numero} vermelho → recolorir "
-            f"{pai.conta.numero}(P), {tio.conta.numero}(P), {avo.conta.numero}(V)"
-        )
+        if self._detalhado:
+            self._log(
+                f"tio {tio.conta.numero} vermelho → recolorir "
+                f"{pai.conta.numero}(P), {tio.conta.numero}(P), {avo.conta.numero}(V)"
+            )
         self._pintar(pai, PRETO)
         self._pintar(tio, PRETO)
         self._pintar(avo, VERMELHO)
-        self._log(f"recolorações: {self._recoloracoes}")
+        if self._detalhado:
+            self._log(f"recolorações: {self._recoloracoes}")
 
     def _caso_linha(self, pai: _NoRN, avo: _NoRN) -> None:
-        self._log(
-            f"recolorir {pai.conta.numero}(P), {avo.conta.numero}(V) "
-            f"e rotacionar em {avo.conta.numero}"
-        )
+        if self._detalhado:
+            self._log(
+                f"recolorir {pai.conta.numero}(P), {avo.conta.numero}(V) "
+                f"e rotacionar em {avo.conta.numero}"
+            )
         self._pintar(pai, PRETO)
         self._pintar(avo, VERMELHO)
 
@@ -343,27 +362,32 @@ class ArvoreRubroNegra:
         """
         z = self._localizar(numero)
         if z is self.NIL:
-            self._log(f"remoção {numero}: não encontrada")
+            if self._detalhado:
+                self._log(f"remoção {numero}: não encontrada")
             return None
 
         y = z
         cor_original_y = y.cor
         if z.esquerda is self.NIL:
             if z.direita is self.NIL:
-                self._log(f"remover {numero}: folha ({'V' if z.cor == VERMELHO else 'P'})")
+                if self._detalhado:
+                    self._log(f"remover {numero}: folha ({'V' if z.cor == VERMELHO else 'P'})")
             else:
-                self._log(f"remover {numero}: 1 filho (direito) → sobe para o lugar")
+                if self._detalhado:
+                    self._log(f"remover {numero}: 1 filho (direito) → sobe para o lugar")
             x = z.direita
             self._transplantar(z, z.direita)
         elif z.direita is self.NIL:
-            self._log(f"remover {numero}: 1 filho (esquerdo) → sobe para o lugar")
+            if self._detalhado:
+                self._log(f"remover {numero}: 1 filho (esquerdo) → sobe para o lugar")
             x = z.esquerda
             self._transplantar(z, z.esquerda)
         else:
             y = self._minimo_no(z.direita)
-            self._log(
-                f"remover {numero}: 2 filhos → sucessor {y.conta.numero} assume o lugar"
-            )
+            if self._detalhado:
+                self._log(
+                    f"remover {numero}: 2 filhos → sucessor {y.conta.numero} assume o lugar"
+                )
             cor_original_y = y.cor
             x = y.direita
             if y.pai is z:
@@ -376,10 +400,11 @@ class ArvoreRubroNegra:
             y.esquerda = z.esquerda
             y.esquerda.pai = y
             if self._pintar(y, z.cor):
-                self._log(
-                    f"sucessor {y.conta.numero} herda a cor de {numero} "
-                    f"(recolorações: {self._recoloracoes})"
-                )
+                if self._detalhado:
+                    self._log(
+                        f"sucessor {y.conta.numero} herda a cor de {numero} "
+                        f"(recolorações: {self._recoloracoes})"
+                    )
 
         self._tamanho -= 1
         if cor_original_y == PRETO:
@@ -406,11 +431,12 @@ class ArvoreRubroNegra:
             if x is pai.esquerda:
                 w = pai.direita
                 if w.cor == VERMELHO:
-                    self._log(
-                        f"caso 1: irmão {w.conta.numero} vermelho → recolorir "
-                        f"{w.conta.numero}(P), {pai.conta.numero}(V) e rotacionar "
-                        f"em {pai.conta.numero}"
-                    )
+                    if self._detalhado:
+                        self._log(
+                            f"caso 1: irmão {w.conta.numero} vermelho → recolorir "
+                            f"{w.conta.numero}(P), {pai.conta.numero}(V) e rotacionar "
+                            f"em {pai.conta.numero}"
+                        )
                     self._pintar(w, PRETO)
                     self._pintar(pai, VERMELHO)
                     self._rotacao_esquerda(pai)
@@ -420,11 +446,12 @@ class ArvoreRubroNegra:
                     x = pai
                     continue
                 if w.direita.cor == PRETO:  # caso 3: sobrinho próximo vermelho
-                    self._log(
-                        f"caso 3: sobrinho próximo {w.esquerda.conta.numero} vermelho "
-                        f"→ recolorir {w.esquerda.conta.numero}(P), "
-                        f"{w.conta.numero}(V) e rotacionar em {w.conta.numero}"
-                    )
+                    if self._detalhado:
+                        self._log(
+                            f"caso 3: sobrinho próximo {w.esquerda.conta.numero} vermelho "
+                            f"→ recolorir {w.esquerda.conta.numero}(P), "
+                            f"{w.conta.numero}(V) e rotacionar em {w.conta.numero}"
+                        )
                     self._pintar(w.esquerda, PRETO)
                     self._pintar(w, VERMELHO)
                     self._rotacao_direita(w)
@@ -435,11 +462,12 @@ class ArvoreRubroNegra:
             else:  # espelho: x é filho direito
                 w = pai.esquerda
                 if w.cor == VERMELHO:
-                    self._log(
-                        f"caso 1 (espelho): irmão {w.conta.numero} vermelho → "
-                        f"recolorir {w.conta.numero}(P), {pai.conta.numero}(V) e "
-                        f"rotacionar em {pai.conta.numero}"
-                    )
+                    if self._detalhado:
+                        self._log(
+                            f"caso 1 (espelho): irmão {w.conta.numero} vermelho → "
+                            f"recolorir {w.conta.numero}(P), {pai.conta.numero}(V) e "
+                            f"rotacionar em {pai.conta.numero}"
+                        )
                     self._pintar(w, PRETO)
                     self._pintar(pai, VERMELHO)
                     self._rotacao_direita(pai)
@@ -449,12 +477,13 @@ class ArvoreRubroNegra:
                     x = pai
                     continue
                 if w.esquerda.cor == PRETO:  # caso 3 (espelho)
-                    self._log(
-                        f"caso 3 (espelho): sobrinho próximo "
-                        f"{w.direita.conta.numero} vermelho → recolorir "
-                        f"{w.direita.conta.numero}(P), {w.conta.numero}(V) e "
-                        f"rotacionar em {w.conta.numero}"
-                    )
+                    if self._detalhado:
+                        self._log(
+                            f"caso 3 (espelho): sobrinho próximo "
+                            f"{w.direita.conta.numero} vermelho → recolorir "
+                            f"{w.direita.conta.numero}(P), {w.conta.numero}(V) e "
+                            f"rotacionar em {w.conta.numero}"
+                        )
                     self._pintar(w.direita, PRETO)
                     self._pintar(w, VERMELHO)
                     self._rotacao_esquerda(w)
@@ -464,25 +493,28 @@ class ArvoreRubroNegra:
                 x = self._raiz
 
         if self._pintar(x, PRETO):
-            self._log(
-                f"{x.conta.numero} pintado de preto "
-                f"(recolorações: {self._recoloracoes})"
-            )
+            if self._detalhado:
+                self._log(
+                    f"{x.conta.numero} pintado de preto "
+                    f"(recolorações: {self._recoloracoes})"
+                )
 
     def _caso_irmao_filhos_pretos(self, w: _NoRN, pai: _NoRN) -> None:
-        self._log(
-            f"caso 2: irmão {w.conta.numero} preto com filhos pretos → "
-            f"recolorir {w.conta.numero}(V), problema sobe para {pai.conta.numero}"
-        )
+        if self._detalhado:
+            self._log(
+                f"caso 2: irmão {w.conta.numero} preto com filhos pretos → "
+                f"recolorir {w.conta.numero}(V), problema sobe para {pai.conta.numero}"
+            )
         self._pintar(w, VERMELHO)
 
     def _caso_sobrinho_distante(self, w: _NoRN, pai: _NoRN, distante: _NoRN) -> None:
-        self._log(
-            f"caso 4: sobrinho distante {distante.conta.numero} vermelho → "
-            f"{w.conta.numero} herda a cor de {pai.conta.numero}, "
-            f"{pai.conta.numero}(P), {distante.conta.numero}(P) e rotacionar "
-            f"em {pai.conta.numero}"
-        )
+        if self._detalhado:
+            self._log(
+                f"caso 4: sobrinho distante {distante.conta.numero} vermelho → "
+                f"{w.conta.numero} herda a cor de {pai.conta.numero}, "
+                f"{pai.conta.numero}(P), {distante.conta.numero}(P) e rotacionar "
+                f"em {pai.conta.numero}"
+            )
         self._pintar(w, pai.cor)
         self._pintar(pai, PRETO)
         self._pintar(distante, PRETO)

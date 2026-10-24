@@ -1,8 +1,8 @@
-
 """Modelos e validações do sistema bancário."""
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+import re
 import unicodedata
 
 
@@ -78,8 +78,17 @@ def normalizar_tipo(valor: str) -> str:
     return tipo
 
 
+_FORMATO_SALDO = re.compile(r"[0-9]+(?:[.,][0-9]{1,2})?")  # [0-9], não \d: \d aceita dígitos Unicode
+_CENTAVOS = Decimal("0.01")
+
+
 def normalizar_saldo(valor: str | int | Decimal) -> Decimal:
-    """Converte o saldo para Decimal, aceitando vírgula ou ponto."""
+    """Valida o saldo e o padroniza com exatamente 2 casas decimais.
+
+    Texto aceito: só dígitos, com vírgula ou ponto e até 2 casas
+    ("1500", "1500,5", "1500.50"). Rejeita sinal, notação científica
+    ("1e2"), separador "_" e separador de milhar ("1.234,56").
+    """
     if isinstance(valor, bool) or not isinstance(
         valor, (str, int, Decimal)
     ):
@@ -91,25 +100,30 @@ def normalizar_saldo(valor: str | int | Decimal) -> Decimal:
         if not texto:
             raise ValueError("O saldo não pode ficar vazio.")
 
-        texto = texto.replace(",", ".")
+        if texto.startswith("-"):
+            raise ValueError("O saldo não pode ser negativo.")
+
+        if not _FORMATO_SALDO.fullmatch(texto):
+            raise ValueError(
+                "O saldo deve ter só dígitos, com vírgula ou ponto e até "
+                "2 casas decimais (ex.: 1500,50)."
+            )
+
+        saldo = Decimal(texto.replace(",", "."))
     else:
-        texto = str(valor)
+        saldo = Decimal(valor)
 
-    try:
-        saldo = Decimal(texto)
-    except (InvalidOperation, ValueError):
-        raise ValueError("O saldo informado é inválido.") from None
+        if not saldo.is_finite():
+            raise ValueError("O saldo deve ser um número finito.")
 
-    if not saldo.is_finite():
-        raise ValueError("O saldo deve ser um número finito.")
+        if saldo < 0:
+            raise ValueError("O saldo não pode ser negativo.")
 
-    if saldo < 0:
-        raise ValueError("O saldo não pode ser negativo.")
+        if saldo.as_tuple().exponent < -2:
+            raise ValueError("O saldo deve ter no máximo 2 casas decimais.")
 
-    if saldo.as_tuple().exponent < -2:
-        raise ValueError("O saldo deve ter no máximo 2 casas decimais.")
-
-    return saldo
+    # copy_abs() elimina o "-0"; quantize fixa sempre 2 casas (1500 → 1500.00)
+    return saldo.copy_abs().quantize(_CENTAVOS)
 
 
 @dataclass(frozen=True, slots=True)
