@@ -1,7 +1,7 @@
 """Utilitários de teste da AVL.
 
-`ContaFake` substitui a Conta do I3 enquanto modelos.py não existe; tem os
-mesmos atributos, então os testes continuam valendo depois da integração.
+`conta()` cria uma Conta REAL (modelos.py do I3) com atributos padrão válidos,
+para os testes exercitarem a árvore exatamente como a aplicação a usa.
 
 `verificar_avl` confere as propriedades por conta própria, sem usar nada da
 árvore além da raiz — é a "contagem independente" pedida no plano.
@@ -9,21 +9,21 @@ mesmos atributos, então os testes continuam valendo depois da integração.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from decimal import Decimal
 
+from modelos import Conta
 
-@dataclass(frozen=True, slots=True)
-class ContaFake:
-    numero: int
-    titular: str = "Titular Teste"
-    agencia: str = "0001"
-    tipo: str = "CORRENTE"
-    saldo: Decimal = Decimal("0.00")
+_PADRAO = {
+    "titular": "Titular Teste",
+    "agencia": "0001",
+    "tipo": "CORRENTE",
+    "saldo": Decimal("0.00"),
+}
 
 
-def conta(numero: int, **atributos) -> ContaFake:
-    return ContaFake(numero, **atributos)
+def conta(numero: int, **atributos) -> Conta:
+    """Conta válida com o número dado; qualquer atributo pode ser sobrescrito."""
+    return Conta(numero, **{**_PADRAO, **atributos})
 
 
 def chaves(contas) -> list[int]:
