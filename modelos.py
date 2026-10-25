@@ -1,3 +1,4 @@
+
 """Modelos e validações do sistema bancário."""
 
 from dataclasses import dataclass

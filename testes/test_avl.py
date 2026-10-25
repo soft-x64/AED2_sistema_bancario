@@ -393,6 +393,44 @@ class TestExibir(unittest.TestCase):
         self.assertIn("2 [h=1, FB=0]", texto)
 
 
+class TestRotacoesPorCaso(unittest.TestCase):
+    """Extra da AVL (opção B): contagem de rebalanceamentos por caso."""
+
+    def test_cada_caso_isolado(self):
+        for sequencia, caso in [((30, 20, 10), "LL"), ((10, 20, 30), "RR"),
+                                ((30, 10, 20), "LR"), ((10, 30, 20), "RL")]:
+            esperado = dict.fromkeys(("LL", "RR", "LR", "RL"), 0)
+            esperado[caso] = 1
+            self.assertEqual(arvore_com(*sequencia).rotacoes_por_caso(), esperado, caso)
+
+    def test_crescente_so_gera_rr(self):
+        casos = arvore_com(*range(1, 1024)).rotacoes_por_caso()
+        self.assertGreater(casos["RR"], 0)
+        self.assertEqual((casos["LL"], casos["LR"], casos["RL"]), (0, 0, 0))
+
+    def test_soma_bate_com_total(self):
+        rng = random.Random(5)
+        a = ArvoreAVL()
+        for _ in range(3000):
+            k = rng.randint(1, 500)
+            a.inserir(conta(k)) if rng.random() < 0.6 else a.remover(k)
+        c = a.rotacoes_por_caso()
+        self.assertEqual(c["LL"] + c["RR"] + 2 * (c["LR"] + c["RL"]),
+                         a.estatisticas()["rotacoes"])
+        self.assertTrue(all(v > 0 for v in c.values()), c)
+
+    def test_reset_e_copia(self):
+        a = arvore_com(30, 20, 10)
+        a.rotacoes_por_caso()["LL"] = 99  # alterar a cópia não afeta a árvore
+        self.assertEqual(a.rotacoes_por_caso()["LL"], 1)
+        a.resetar_estatisticas()
+        self.assertEqual(set(a.rotacoes_por_caso().values()), {0})
+
+    def test_contrato_comum_inalterado(self):
+        self.assertEqual(set(arvore_com(1, 2, 3).estatisticas()),
+                         {"rotacoes", "recoloracoes", "nos_visitados", "buscas"})
+
+
 class TestModoDetalhado(unittest.TestCase):
     def test_mesma_arvore_e_mensagens(self):
         sequencia = [30, 10, 20, 40, 50]

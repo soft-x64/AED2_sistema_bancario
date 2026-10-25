@@ -10,9 +10,15 @@
         50
     ],
     "repeticoes": 5,
+    "numeracao_repeticoes": "1 a 5",
     "semente_base": 2026,
-    "versao_python": "3.13.3",
-    "sistema_operacional": "Windows",
-    "cpu": "Intel64 Family 6 Model 186 Stepping 3, GenuineIntel",
-    "data": "2026-10-24 18:05:40"
+    "semente_permutacao": "SEMENTE_BASE + 1000*repeticao + n (permutação, contas e buscas)",
+    "semente_subconjunto": "SEMENTE_BASE + 500000 + 1000*repeticao + n + percentual",
+    "ordem_estruturas": "repetição par: AVL → RN; ímpar: RN → AVL",
+    "aquecimento": "1 rodada descartada antes da coleta",
+    "unidade_tempo": "segundos (time.perf_counter)",
+    "python": "CPython 3.13.2",
+    "sistema_operacional": "Windows-11-10.0.26200-SP0",
+    "processador": "Intel64 Family 6 Model 140 Stepping 1, GenuineIntel",
+    "data": "2026-10-24 23:46:14"
 }
